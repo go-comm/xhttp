@@ -20,6 +20,10 @@ type Client struct {
 	responseInterceptors []func(Response) error
 }
 
+func (c Client) Ptr() *Client {
+	return &c
+}
+
 func (c *Client) Do(req Request) Response {
 	if err := req.Form().Error(); err != nil {
 		return &response{err: err, cli: c}
