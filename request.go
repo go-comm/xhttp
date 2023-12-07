@@ -38,12 +38,9 @@ func encodeBody(encoder Encoder, v interface{}) (io.ReadCloser, error) {
 }
 
 func newRequest(ctx context.Context, cli *Client, method, url string, body interface{}) Request {
-	br, err1 := encodeBody(cli.encoder, body)
-	req, err2 := http.NewRequestWithContext(ctx, method, url, br)
-	r := &request{err: err2, req: req, cli: cli}
-	if err1 != nil {
-		r.err = err1
-	}
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	r := &request{err: err, req: req, cli: cli}
+	r.Body(body)
 	return r
 }
 
@@ -71,11 +68,12 @@ type Request interface {
 var _ Request = (*request)(nil)
 
 type request struct {
-	err   error
-	req   *http.Request
-	cli   *Client
-	mw    *multipart.Writer
-	forms url.Values
+	err        error
+	req        *http.Request
+	cli        *Client
+	wbody      io.Writer
+	mw         *multipart.Writer
+	formValues url.Values
 }
 
 func (r *request) setError(err error) Request {
@@ -96,7 +94,13 @@ func (r *request) Do() Response {
 }
 
 func (r *request) Body(body interface{}) Request {
-	r.req.Body, r.err = encodeBody(r.cli.encoder, body)
+	if r.err != nil {
+		return r
+	}
+	if body != nil {
+		r.req.Body, r.err = encodeBody(r.cli.encoder, body)
+		r.wbody, _ = body.(io.Writer)
+	}
 	return r
 }
 
@@ -166,14 +170,16 @@ func (r *request) File(name string, file string) Request {
 	if r.err != nil {
 		return r
 	}
-	if r.forms != nil {
+	if r.formValues != nil {
 		r.err = errors.New("File() must be called before Field()")
 		return r
 	}
+	if r.wbody == nil {
+		r.Body(new(bytes.Buffer))
+	}
 	if r.mw == nil {
-		var body = new(bytes.Buffer)
-		r.mw = multipart.NewWriter(body)
-		r.ContentType(r.mw.FormDataContentType()).Body(body)
+		r.mw = multipart.NewWriter(r.wbody)
+		r.ContentType(r.mw.FormDataContentType())
 	}
 	fw, err := r.mw.CreateFormFile(name, file)
 	if err != nil {
@@ -186,8 +192,7 @@ func (r *request) File(name string, file string) Request {
 		return r
 	}
 	defer f.Close()
-	_, err = io.Copy(fw, f)
-	r.err = err
+	_, r.err = io.Copy(fw, f)
 	return r
 }
 
@@ -195,13 +200,30 @@ func (r *request) Field(name string, value string) Request {
 	if r.err != nil {
 		return r
 	}
-	if r.mw != nil {
+
+	if r.mw != nil { // multipart/form-data
 		r.mw.WriteField(name, value)
-	} else {
-		if r.forms == nil {
-			r.forms = url.Values{}
-		}
-		r.forms.Add(name, value)
+		return r
+	}
+
+	// x-www-form-urlencoded
+	if r.wbody == nil {
+		r.Body(new(bytes.Buffer))
+	}
+	if r.formValues == nil {
+		r.formValues = url.Values{}
+		r.ContentType("application/x-www-form-urlencoded")
+	}
+	r.formValues.Add(name, value)
+	return r
+}
+
+func (r *request) Fields(fields map[string]string) Request {
+	if r.err != nil {
+		return r
+	}
+	for k, v := range fields {
+		r.Field(k, v)
 	}
 	return r
 }
@@ -212,9 +234,11 @@ func (r *request) Form() Request {
 	}
 	if r.mw != nil {
 		r.err = r.mw.Close()
-	} else if r.forms != nil {
-		r.ContentType("application/x-www-form-urlencoded")
-		r.Body(r.forms.Encode())
+	}
+	if r.formValues != nil {
+		if r.wbody != nil {
+			r.wbody.Write(StrToBytes(r.formValues.Encode()))
+		}
 	}
 	return r
 }

@@ -13,6 +13,6 @@ func TestGet(t *testing.T) {
 
 func TestFile(t *testing.T) {
 	c := NewClient().Gzip(true).ResponseInterceptor(WhetherStatusCode(200))
-	n, err := c.Get(context.TODO(), "https://www.baidu.com").Do().File("file.txt", 0755)
+	n, err := c.Get(context.TODO(), "https://www.baidu.com").Do().File("testdata-file.txt", 0755)
 	t.Log(n, err)
 }
