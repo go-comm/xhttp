@@ -3,6 +3,7 @@ package xhttp
 import (
 	"io"
 	"net/http"
+	"os"
 )
 
 func decodeBody(decoder Decoder, r io.ReadCloser, v interface{}) error {
@@ -36,6 +37,8 @@ type Response interface {
 	JSON(v interface{}) error
 	Gob(v interface{}) error
 	XML(v interface{}) error
+	File(name string, perm os.FileMode) (int64, error)
+	WriteTo(w io.Writer) (int64, error)
 }
 
 var _ Response = (*response)(nil)
@@ -117,4 +120,29 @@ func (r *response) Gob(v interface{}) error {
 
 func (r *response) XML(v interface{}) error {
 	return r.decode(v, XML)
+}
+
+func (r *response) File(name string, perm os.FileMode) (int64, error) {
+	defer func() {
+		r.Close()
+	}()
+	if r.err != nil || r.res == nil {
+		return 0, r.err
+	}
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, perm)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	return io.Copy(f, r.res.Body)
+}
+
+func (r *response) WriteTo(w io.Writer) (int64, error) {
+	defer func() {
+		r.Close()
+	}()
+	if r.err != nil || r.res == nil {
+		return 0, r.err
+	}
+	return io.Copy(w, r.res.Body)
 }
