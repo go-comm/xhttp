@@ -52,14 +52,16 @@ func (c *Client) Do(req Request) Response {
 	return resp
 }
 
+func (c Client) Request(ctx context.Context, method string, url string, body interface{}) Request {
+	return newRequest(ctx, &c, method, url, body)
+}
+
 func (c Client) Get(ctx context.Context, url string) Request {
-	req := newRequest(ctx, &c, "GET", url, nil)
-	return req
+	return newRequest(ctx, &c, "GET", url, nil)
 }
 
 func (c Client) Head(ctx context.Context, url string, body interface{}) Request {
-	req := newRequest(ctx, &c, "HEAD", url, body)
-	return req
+	return newRequest(ctx, &c, "HEAD", url, body)
 }
 
 func (c Client) Post(ctx context.Context, url string, body interface{}) Request {
@@ -75,23 +77,19 @@ func (c Client) Delete(ctx context.Context, url string, body interface{}) Reques
 }
 
 func (c Client) Connect(ctx context.Context, url string, body interface{}) Request {
-	req := newRequest(ctx, &c, "CONNECT", url, body)
-	return req
+	return newRequest(ctx, &c, "CONNECT", url, body)
 }
 
 func (c Client) Options(ctx context.Context, url string, body interface{}) Request {
-	req := newRequest(ctx, &c, "OPTIONS", url, body)
-	return req
+	return newRequest(ctx, &c, "OPTIONS", url, body)
 }
 
 func (c Client) Trace(ctx context.Context, url string, body interface{}) Request {
-	req := newRequest(ctx, &c, "TRACE", url, body)
-	return req
+	return newRequest(ctx, &c, "TRACE", url, body)
 }
 
 func (c Client) PATCH(ctx context.Context, url string, body interface{}) Request {
-	req := newRequest(ctx, &c, "PATCH", url, body)
-	return req
+	return newRequest(ctx, &c, "PATCH", url, body)
 }
 
 func (c Client) WithClient(cli *http.Client) Client {
