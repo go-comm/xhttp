@@ -31,6 +31,7 @@ type Response interface {
 	setError(err error) Response
 	Error() error
 	Response() *http.Response
+	Interceptor(f func(Response) error) Response
 	Decode(v interface{}, decoder ...Decoder) error
 	String() (string, error)
 	Bytes() ([]byte, error)
@@ -62,11 +63,11 @@ func (r *response) Response() *http.Response {
 	return r.res
 }
 
-func (r *response) Interceptor(f func(*http.Response) error) Response {
+func (r *response) Interceptor(f func(Response) error) Response {
 	if r.err != nil {
 		return r
 	}
-	r.err = f(r.res)
+	r.err = f(r)
 	return r
 }
 

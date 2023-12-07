@@ -53,7 +53,7 @@ type Request interface {
 	Request() *http.Request
 	Do() Response
 	Body(body interface{}) Request
-	Interceptor(f func(*http.Request) error) Request
+	Interceptor(f func(Request) error) Request
 	AddHeader(k string, v string) Request
 	SetHeader(k string, v string) Request
 	DelHeader(k string, v string) Request
@@ -100,11 +100,11 @@ func (r *request) Body(body interface{}) Request {
 	return r
 }
 
-func (r *request) Interceptor(f func(*http.Request) error) Request {
+func (r *request) Interceptor(f func(Request) error) Request {
 	if r.err != nil {
 		return r
 	}
-	r.err = f(r.req)
+	r.err = f(r)
 	return r
 }
 
