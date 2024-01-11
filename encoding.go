@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	JSON = withEncoding(
+	JSON = WithEncoding(
 		EncoderFunc(func(w io.Writer, v interface{}) error {
 			return json.NewEncoder(w).Encode(v)
 		}),
@@ -17,7 +17,7 @@ var (
 		}),
 	)
 
-	Gob = withEncoding(
+	Gob = WithEncoding(
 		EncoderFunc(func(w io.Writer, v interface{}) error {
 			return gob.NewEncoder(w).Encode(v)
 		}),
@@ -26,7 +26,7 @@ var (
 		}),
 	)
 
-	XML = withEncoding(
+	XML = WithEncoding(
 		EncoderFunc(func(w io.Writer, v interface{}) error {
 			return xml.NewEncoder(w).Encode(v)
 		}),
@@ -41,7 +41,7 @@ type encoding struct {
 	Decoder
 }
 
-func withEncoding(en Encoder, de Decoder) *encoding {
+func WithEncoding(en Encoder, de Decoder) *encoding {
 	return &encoding{Encoder: en, Decoder: de}
 }
 
