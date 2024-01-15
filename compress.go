@@ -9,14 +9,26 @@ func (c Client) Gzip(enable bool) Client {
 	if !enable {
 		return c
 	}
-	return c.RequestInterceptor(gzipRequest()).ResponseInterceptor(gzipResponse())
+	return c.Interceptor(GzipInterceptor())
 }
 
-func gzipRequest() func(r Request) error {
-	return func(r Request) error {
-		req := r.Request()
-		req.Header.Set("Accept-Encoding", "gzip")
-		return nil
+func GzipInterceptor() func(next func(Request) Response) func(Request) Response {
+	return func(next func(Request) Response) func(Request) Response {
+		return func(req Request) Response {
+			req.Request().Header.Set("Accept-Encoding", "gzip")
+			resp := next((req))
+			res := resp.Response()
+			if res.Header.Get("Content-Encoding") != "gzip" {
+				return nil
+			}
+			cr, err := gzip.NewReader(res.Body)
+			if err != nil {
+				resp.setError(err)
+				return resp
+			}
+			res.Body = &compressedResponseReader{Reader: cr, ResponseBody: res.Body}
+			return resp
+		}
 	}
 }
 
@@ -31,19 +43,4 @@ func (rr *compressedResponseReader) Read(p []byte) (n int, err error) {
 
 func (rr *compressedResponseReader) Close() error {
 	return rr.ResponseBody.Close()
-}
-
-func gzipResponse() func(r Response) error {
-	return func(r Response) error {
-		res := r.Response()
-		if res.Header.Get("Content-Encoding") != "gzip" {
-			return nil
-		}
-		cr, err := gzip.NewReader(res.Body)
-		if err != nil {
-			return err
-		}
-		res.Body = &compressedResponseReader{Reader: cr, ResponseBody: res.Body}
-		return nil
-	}
 }

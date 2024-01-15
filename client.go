@@ -13,11 +13,10 @@ func NewClient() Client {
 }
 
 type Client struct {
-	cli                  *http.Client
-	encoder              Encoder
-	decoder              Decoder
-	requestInterceptors  []func(Request) error
-	responseInterceptors []func(Response) error
+	cli          *http.Client
+	encoder      Encoder
+	decoder      Decoder
+	interceptors []func(next func(Request) Response) func(Request) Response
 }
 
 func (c Client) Ptr() *Client {
@@ -28,28 +27,24 @@ func (c *Client) Do(req Request) Response {
 	if err := req.Form().Error(); err != nil {
 		return &response{err: err, cli: c}
 	}
-	if len(c.requestInterceptors) > 0 {
-		var err error
-		for _, interceptor := range c.requestInterceptors {
-			if err = interceptor(req); err != nil {
-				req.setError(err)
-			}
+	interceptors := c.interceptors
+
+	var h = func(Request) Response {
+		res, err := c.cli.Do(req.Request())
+		resp := &response{err: err, cli: c, res: res}
+		if err = resp.Error(); err != nil {
+			return resp
 		}
-	}
-	res, err := c.cli.Do(req.Request())
-	resp := &response{err: err, cli: c, res: res}
-	if err = resp.Error(); err != nil {
 		return resp
 	}
-	if len(c.responseInterceptors) > 0 {
-		var err error
-		for _, interceptor := range c.responseInterceptors {
-			if err = interceptor(resp); err != nil {
-				resp.setError(err)
-			}
+
+	if len(interceptors) > 0 {
+		for _, interceptor := range interceptors {
+			h = interceptor(h)
 		}
 	}
-	return resp
+
+	return h(req)
 }
 
 func (c Client) Request(ctx context.Context, method string, url string, body interface{}) Request {
@@ -117,14 +112,32 @@ func (c Client) EncoderFunc(f func(w io.Writer, v interface{}) error) Client {
 	return c
 }
 
-func (c Client) RequestInterceptor(f func(Request) error) Client {
-	c.requestInterceptors = append(c.requestInterceptors, f)
+func (c Client) Interceptor(interceptor func(next func(Request) Response) func(Request) Response) Client {
+	c.interceptors = append(c.interceptors, interceptor)
 	return c
 }
 
+func (c Client) RequestInterceptor(f func(Request) error) Client {
+	return c.Interceptor(func(next func(Request) Response) func(Request) Response {
+		return func(req Request) Response {
+			if err := f(req); err != nil {
+				return &response{err: err, cli: &c}
+			}
+			return next(req)
+		}
+	})
+}
+
 func (c Client) ResponseInterceptor(f func(Response) error) Client {
-	c.responseInterceptors = append(c.responseInterceptors, f)
-	return c
+	return c.Interceptor(func(next func(Request) Response) func(Request) Response {
+		return func(req Request) Response {
+			resp := next(req)
+			if err := f(resp); err != nil {
+				resp.setError(err)
+			}
+			return resp
+		}
+	})
 }
 
 func Get(ctx context.Context, url string) Request {
