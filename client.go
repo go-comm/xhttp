@@ -9,7 +9,7 @@ import (
 var DefaultClient = NewClient()
 
 func NewClient() Client {
-	return (Client{}).WithClient(new(http.Client)).Encoder(JSON).Decoder(JSON)
+	return (Client{}).WithClient(new(http.Client))
 }
 
 type Client struct {
