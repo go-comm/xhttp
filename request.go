@@ -45,7 +45,7 @@ func newRequest(ctx context.Context, cli *Client, method, url string, body inter
 }
 
 type Request interface {
-	setError(err error) Request
+	SetError(err error) Request
 	Error() error
 	Request() *http.Request
 	Do() Response
@@ -76,7 +76,7 @@ type request struct {
 	formValues url.Values
 }
 
-func (r *request) setError(err error) Request {
+func (r *request) SetError(err error) Request {
 	r.err = err
 	return r
 }

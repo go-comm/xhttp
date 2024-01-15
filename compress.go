@@ -3,6 +3,7 @@ package xhttp
 import (
 	"compress/gzip"
 	"io"
+	"strings"
 )
 
 func (c Client) Gzip(enable bool) Client {
@@ -12,22 +13,24 @@ func (c Client) Gzip(enable bool) Client {
 	return c.Interceptor(GzipInterceptor())
 }
 
-func GzipInterceptor() func(next func(Request) Response) func(Request) Response {
-	return func(next func(Request) Response) func(Request) Response {
-		return func(req Request) Response {
+func GzipInterceptor() func(next func(Request) (Response, error)) func(Request) (Response, error) {
+	return func(next func(Request) (Response, error)) func(Request) (Response, error) {
+		return func(req Request) (Response, error) {
 			req.Request().Header.Set("Accept-Encoding", "gzip")
-			resp := next((req))
+			resp, err := next((req))
+			if err != nil {
+				return resp, err
+			}
 			res := resp.Response()
-			if res.Header.Get("Content-Encoding") != "gzip" {
-				return nil
+			if strings.ToLower(res.Header.Get("Content-Encoding")) != "gzip" {
+				return resp, nil
 			}
 			cr, err := gzip.NewReader(res.Body)
 			if err != nil {
-				resp.setError(err)
-				return resp
+				return resp, err
 			}
 			res.Body = &compressedResponseReader{Reader: cr, ResponseBody: res.Body}
-			return resp
+			return resp, nil
 		}
 	}
 }

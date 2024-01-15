@@ -28,7 +28,7 @@ func decodeBody(decoder Decoder, r io.ReadCloser, v interface{}) error {
 }
 
 type Response interface {
-	setError(err error) Response
+	SetError(err error) Response
 	Error() error
 	Response() *http.Response
 	Interceptor(f func(Response) error) Response
@@ -50,7 +50,7 @@ type response struct {
 	cli *Client
 }
 
-func (r *response) setError(err error) Response {
+func (r *response) SetError(err error) Response {
 	r.err = err
 	return r
 }
