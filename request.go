@@ -60,9 +60,10 @@ type Request interface {
 	JSON() Request
 	Gob() Request
 	XML() Request
+	Fields(fields map[string]string) Request
 	Field(name string, value string) Request
 	File(name string, file string) Request
-	Form() Request
+	form() Request
 }
 
 var _ Request = (*request)(nil)
@@ -179,7 +180,6 @@ func (r *request) File(name string, file string) Request {
 	}
 	if r.mw == nil {
 		r.mw = multipart.NewWriter(r.wbody)
-		r.ContentType(r.mw.FormDataContentType())
 	}
 	fw, err := r.mw.CreateFormFile(name, file)
 	if err != nil {
@@ -200,19 +200,12 @@ func (r *request) Field(name string, value string) Request {
 	if r.err != nil {
 		return r
 	}
-
 	if r.mw != nil { // multipart/form-data
 		r.mw.WriteField(name, value)
 		return r
 	}
-
-	// x-www-form-urlencoded
-	if r.wbody == nil {
-		r.Body(new(bytes.Buffer))
-	}
 	if r.formValues == nil {
 		r.formValues = url.Values{}
-		r.ContentType("application/x-www-form-urlencoded")
 	}
 	r.formValues.Add(name, value)
 	return r
@@ -228,17 +221,20 @@ func (r *request) Fields(fields map[string]string) Request {
 	return r
 }
 
-func (r *request) Form() Request {
+func (r *request) form() Request {
 	if r.err != nil {
 		return r
 	}
 	if r.mw != nil {
 		r.err = r.mw.Close()
+		r.ContentType(r.mw.FormDataContentType())
+		return r
 	}
 	if r.formValues != nil {
 		if r.wbody != nil {
-			r.wbody.Write(StrToBytes(r.formValues.Encode()))
+			_, r.err = r.wbody.Write(StrToBytes(r.formValues.Encode()))
 		}
+		r.ContentType("application/x-www-form-urlencoded")
 	}
 	return r
 }
