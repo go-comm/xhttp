@@ -17,7 +17,7 @@ func GzipInterceptor() func(next func(Request) (Response, error)) func(Request) 
 	return func(next func(Request) (Response, error)) func(Request) (Response, error) {
 		return func(req Request) (Response, error) {
 			req.Request().Header.Set("Accept-Encoding", "gzip")
-			resp, err := next((req))
+			resp, err := next(req)
 			if err != nil {
 				return resp, err
 			}

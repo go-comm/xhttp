@@ -24,7 +24,7 @@ func (c Client) Ptr() *Client {
 }
 
 func (c *Client) Do(req Request) Response {
-	if err := req.Form().Error(); err != nil {
+	if err := req.Perpare(); err != nil {
 		return &response{err: err, cli: c}
 	}
 	interceptors := c.interceptors

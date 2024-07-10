@@ -9,11 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 )
 
-func encodeBody(encoder Encoder, v interface{}) (io.ReadCloser, error) {
-	var rc io.ReadCloser
-	var err error
+func getBodyReader(encoder Encoder, v interface{}) (rc io.ReadCloser, err error) {
 	switch b := v.(type) {
 	case nil:
 		rc = nil
@@ -24,7 +23,7 @@ func encodeBody(encoder Encoder, v interface{}) (io.ReadCloser, error) {
 	case []byte:
 		rc = _NopCloser(bytes.NewBuffer(b))
 	case string:
-		rc = _NopCloser(bytes.NewBuffer(StrToBytes(b)))
+		rc = _NopCloser(strings.NewReader(b))
 	default:
 		var d bytes.Buffer
 		if encoder == nil {
@@ -60,9 +59,11 @@ type Request interface {
 	JSON() Request
 	Gob() Request
 	XML() Request
+	Form() url.Values
+	Fields(fields map[string]string) Request
 	Field(name string, value string) Request
 	File(name string, file string) Request
-	Form() Request
+	Perpare() error
 }
 
 var _ Request = (*request)(nil)
@@ -71,7 +72,6 @@ type request struct {
 	err        error
 	req        *http.Request
 	cli        *Client
-	wbody      io.Writer
 	mw         *multipart.Writer
 	formValues url.Values
 }
@@ -97,10 +97,7 @@ func (r *request) Body(body interface{}) Request {
 	if r.err != nil {
 		return r
 	}
-	if body != nil {
-		r.req.Body, r.err = encodeBody(r.cli.encoder, body)
-		r.wbody, _ = body.(io.Writer)
-	}
+	r.req.Body, r.err = getBodyReader(r.cli.encoder, body)
 	return r
 }
 
@@ -174,12 +171,10 @@ func (r *request) File(name string, file string) Request {
 		r.err = errors.New("File() must be called before Field()")
 		return r
 	}
-	if r.wbody == nil {
-		r.Body(new(bytes.Buffer))
-	}
 	if r.mw == nil {
-		r.mw = multipart.NewWriter(r.wbody)
-		r.ContentType(r.mw.FormDataContentType())
+		body := new(bytes.Buffer)
+		r.Body(body)
+		r.mw = multipart.NewWriter(body)
 	}
 	fw, err := r.mw.CreateFormFile(name, file)
 	if err != nil {
@@ -196,23 +191,20 @@ func (r *request) File(name string, file string) Request {
 	return r
 }
 
+func (r *request) Form() url.Values {
+	return r.formValues
+}
+
 func (r *request) Field(name string, value string) Request {
 	if r.err != nil {
 		return r
 	}
-
 	if r.mw != nil { // multipart/form-data
 		r.mw.WriteField(name, value)
 		return r
 	}
-
-	// x-www-form-urlencoded
-	if r.wbody == nil {
-		r.Body(new(bytes.Buffer))
-	}
 	if r.formValues == nil {
 		r.formValues = url.Values{}
-		r.ContentType("application/x-www-form-urlencoded")
 	}
 	r.formValues.Add(name, value)
 	return r
@@ -228,17 +220,22 @@ func (r *request) Fields(fields map[string]string) Request {
 	return r
 }
 
-func (r *request) Form() Request {
+func (r *request) Perpare() error {
 	if r.err != nil {
-		return r
+		return r.err
 	}
 	if r.mw != nil {
 		r.err = r.mw.Close()
+		r.ContentType(r.mw.FormDataContentType())
 	}
 	if r.formValues != nil {
-		if r.wbody != nil {
-			r.wbody.Write(StrToBytes(r.formValues.Encode()))
+		r.Body(strings.NewReader(r.formValues.Encode()))
+		r.ContentType("application/x-www-form-urlencoded")
+	}
+	if r.req.Body != nil {
+		if l, ok := r.req.Body.(interface{ Len() int }); ok {
+			r.req.ContentLength = int64(l.Len())
 		}
 	}
-	return r
+	return r.err
 }
