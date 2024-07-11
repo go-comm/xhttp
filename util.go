@@ -1,8 +1,21 @@
 package xhttp
 
 import (
+	"net"
+	"net/http"
+	"runtime"
 	"strings"
 	"unsafe"
+)
+
+var (
+	Redirect        = http.Redirect
+	RedirectHandler = http.RedirectHandler
+	StripPrefix     = http.StripPrefix
+	NotFound        = http.NotFound
+	NotFoundHandler = http.NotFoundHandler
+	ServeFile       = http.ServeFile
+	ServeContent    = http.ServeContent
 )
 
 func StrToBytes(s string) []byte {
@@ -21,6 +34,31 @@ func RemovePort(host string) string {
 		return host[:p]
 	}
 	return host
+}
+
+func Stack() string {
+	var buf [2 << 10]byte
+	return string(buf[:runtime.Stack(buf[:], false)])
+}
+
+func RealIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		i := strings.IndexAny(ip, ",")
+		if i > 0 {
+			xffip := strings.TrimSpace(ip[:i])
+			xffip = strings.TrimPrefix(xffip, "[")
+			xffip = strings.TrimSuffix(xffip, "]")
+			return xffip
+		}
+		return ip
+	}
+	if ip := r.Header.Get("X-Real-Ip"); ip != "" {
+		ip = strings.TrimPrefix(ip, "[")
+		ip = strings.TrimSuffix(ip, "]")
+		return ip
+	}
+	ra, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ra
 }
 
 func Join(u string, us ...string) string {
