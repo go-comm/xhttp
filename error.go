@@ -25,9 +25,17 @@ func HandleError(h func(w http.ResponseWriter, r *http.Request, err error), w ht
 func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	httpError, ok := err.(*HttpError)
 	if !ok {
-		httpError = &HttpError{Code: http.StatusInternalServerError, Message: err.Error()}
+		httpError = NewHttpError(http.StatusInternalServerError, err.Error())
 	}
 	WriteError(w, httpError.Code, httpError.Message)
+}
+
+func NewHttpError(code int, message ...string) *HttpError {
+	he := &HttpError{Code: code, Message: http.StatusText(code)}
+	if len(message) > 0 {
+		he.Message = message[0]
+	}
+	return he
 }
 
 type HttpError struct {
@@ -59,7 +67,7 @@ func (w *errorResponseWriter) Error() error {
 	if !w.hasError() {
 		return nil
 	}
-	return &HttpError{Code: w.statusCode, Message: string(w.message)}
+	return NewHttpError(w.statusCode, string(w.message))
 }
 
 func (w *errorResponseWriter) Header() http.Header {
