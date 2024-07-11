@@ -12,7 +12,7 @@ type BindTextUnmarshaler interface {
 	UnmarshalText(text []byte) error
 }
 
-func BindQuery(r http.Request, v interface{}) error {
+func BindQuery(r *http.Request, v interface{}) error {
 	var query map[string][]string
 	if r.URL != nil {
 		query = r.URL.Query()
@@ -23,14 +23,14 @@ func BindQuery(r http.Request, v interface{}) error {
 	return nil
 }
 
-func BindForm(r http.Request, v interface{}) error {
+func BindForm(r *http.Request, v interface{}) error {
 	if err := BindData(v, r.Form, ""); err != nil {
 		return NewHttpError(http.StatusBadRequest, err.Error())
 	}
 	return nil
 }
 
-func BindHeaders(r http.Request, v interface{}) error {
+func BindHeaders(r *http.Request, v interface{}) error {
 	if err := BindData(v, r.Header, ""); err != nil {
 		return NewHttpError(http.StatusBadRequest, err.Error())
 	}
