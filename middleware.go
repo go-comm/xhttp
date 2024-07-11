@@ -22,10 +22,6 @@ func ApplyHandler(h http.Handler, ms ...Middleware) http.Handler {
 	return h
 }
 
-func ApplyHandlerFunc(h http.HandlerFunc, ms ...Middleware) http.HandlerFunc {
-	return ApplyHandler(h, ms...).ServeHTTP
-}
-
 type Skipper func(w http.ResponseWriter, r *http.Request) bool
 
 func DefaultSkipper(w http.ResponseWriter, r *http.Request) bool {

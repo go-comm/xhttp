@@ -85,7 +85,7 @@ func (router *Router) Pre(ms ...Middleware) *Router {
 }
 
 func (router *Router) HandleFunc(pattern string, h func(http.ResponseWriter, *http.Request), ms ...Middleware) {
-	router.mux.HandleFunc(pattern, ApplyHandlerFunc(h, ms...))
+	router.Handle(pattern, http.HandlerFunc(h), ms...)
 }
 
 func (router *Router) Handle(pattern string, h http.Handler, ms ...Middleware) {
