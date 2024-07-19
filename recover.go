@@ -11,7 +11,7 @@ var DefaultRecoverConfig = RecoverConfig{
 	StackSize:        4 << 10, // 4 KB
 	EnablePrintStack: false,
 	LogFunc:          nil,
-	ErrorHandler:     DefaultErrorHandler,
+	ErrorHandler:     nil,
 }
 
 type RecoverConfig struct {
@@ -61,7 +61,13 @@ func RecoverWithConfig(config RecoverConfig) func(h http.Handler) http.Handler {
 								err = err2
 							}
 						}
-						HandleError(config.ErrorHandler, w, r, err)
+						var h = config.ErrorHandler
+						if h == nil {
+							h = LookupRouter(r).HandleError
+						}
+						if h != nil {
+							h(w, r, err)
+						}
 					}
 				}
 

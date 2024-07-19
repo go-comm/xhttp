@@ -1,9 +1,7 @@
 package xhttp
 
 import (
-	"bufio"
 	"fmt"
-	"net"
 	"net/http"
 )
 
@@ -12,88 +10,71 @@ func (router *Router) SetErrorHandler(h func(w http.ResponseWriter, r *http.Requ
 	return router
 }
 
-func HandleError(h func(w http.ResponseWriter, r *http.Request, err error), w http.ResponseWriter, r *http.Request, err error) {
-	if err == nil {
+func (router *Router) HandleError(w http.ResponseWriter, r *http.Request, err error) {
+	if router == nil {
 		return
 	}
-	if h == nil {
-		h = DefaultErrorHandler
+	var h = router.errorHandler
+	if h != nil {
+		for u := Unwrap(w); u != nil; u = Unwrap(u) {
+			w = u
+		}
+		h(w, r, err)
 	}
-	h(w, r, err)
 }
 
-func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+func (router *Router) defaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	httpError, ok := err.(*HttpError)
 	if !ok {
 		httpError = NewHttpError(http.StatusInternalServerError, err.Error())
 	}
-	WriteError(w, httpError.Code, httpError.Message)
+	WriteError(w, httpError.Code, httpError.Error())
 }
 
 func NewHttpError(code int, message ...string) *HttpError {
-	he := &HttpError{Code: code, Message: http.StatusText(code)}
-	if len(message) > 0 {
+	he := &HttpError{Code: code}
+	if len(message) > 0 && len(message[0]) > 0 {
 		he.Message = message[0]
+	} else {
+		he.Message = http.StatusText(code)
 	}
 	return he
 }
 
 type HttpError struct {
-	Code    int
-	Message string
+	Code    int    `json:"code"`
+	Message string `json:"message,omitempty"`
 }
 
 func (status *HttpError) Error() string {
 	return fmt.Sprintf("Code=%d, Message=%s", status.Code, status.Message)
 }
 
-type errorResponseWriter struct {
-	http.ResponseWriter
+func captureHttpError(h http.Handler, w http.ResponseWriter, r *http.Request) error {
+	var hcode = http.StatusOK
+	var hmsg []byte
+	var pass bool = true
 
-	statusCode int
-	message    []byte
-	wroten     bool
-}
-
-func (w *errorResponseWriter) ErrorCode() int {
-	return w.statusCode
-}
-
-func (w *errorResponseWriter) hasError() bool {
-	return !(w.statusCode >= 0 && w.statusCode < 400)
-}
-
-func (w *errorResponseWriter) Error() error {
-	if !w.hasError() {
+	hooks := &Hooks{
+		WriteHeader: func(w http.ResponseWriter, code int) {
+			hcode = code
+			pass = code >= 100 && code <= 399
+			if pass {
+				w.WriteHeader(hcode)
+			}
+		},
+		Write: func(w http.ResponseWriter, b []byte) (int, error) {
+			if pass {
+				n, err := w.Write(b)
+				return n, err
+			}
+			hmsg = append(hmsg, b...)
+			return len(b), nil
+		},
+	}
+	CaptureResponseWriter(h, hooks, w, r)
+	if pass {
 		return nil
 	}
-	return NewHttpError(w.statusCode, string(w.message))
-}
-
-func (w *errorResponseWriter) Header() http.Header {
-	return w.ResponseWriter.Header()
-}
-
-func (w *errorResponseWriter) WriteHeader(statusCode int) {
-	w.statusCode = statusCode
-}
-
-func (w *errorResponseWriter) Write(b []byte) (int, error) {
-	if !w.hasError() {
-		if !w.wroten {
-			w.ResponseWriter.WriteHeader(w.statusCode)
-			w.wroten = true
-		}
-		return w.ResponseWriter.Write(b)
-	}
-	w.message = append(w.message, b...)
-	return len(b), nil
-}
-
-func (w *errorResponseWriter) Flush() {
-	w.ResponseWriter.(http.Flusher).Flush()
-}
-
-func (w *errorResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	return w.ResponseWriter.(http.Hijacker).Hijack()
+	return NewHttpError(hcode, string(hmsg))
 }

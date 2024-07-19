@@ -14,23 +14,44 @@ func NewRouter() *Router {
 
 func NewRouterWithServeMux(mux ServeMux) *Router {
 	r := &Router{mux: mux}
+	r.errorHandler = r.defaultErrorHandler
 	return r
 }
 
 func LookupRequestContext(r *http.Request) *RequestContext {
 	rc := r.Context().Value(&ctxKey)
 	if rc == nil {
-		panic(errors.New("no router"))
+		return nil
 	}
 	return rc.(*RequestContext)
 }
 
+func MustRequestContext(r *http.Request) *RequestContext {
+	rc := LookupRequestContext(r)
+	if rc == nil {
+		panic(errors.New("no router"))
+	}
+	return rc
+}
+
 func LookupRouter(r *http.Request) *Router {
-	return LookupRequestContext(r).Router
+	rc := LookupRequestContext(r)
+	if rc == nil {
+		return nil
+	}
+	return rc.Router
+}
+
+func MustRouter(r *http.Request) *Router {
+	return MustRequestContext(r).Router
 }
 
 func LookupAttrs(r *http.Request) Attrs {
 	return LookupRequestContext(r).Attrs
+}
+
+func MustAttrs(r *http.Request) Attrs {
+	return MustRequestContext(r).Attrs
 }
 
 type ServeMux interface {
@@ -63,14 +84,9 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h = ApplyHandler(h, router.premiddlewares...)
 	}
 
-	if router.errorHandler == nil {
-		h.ServeHTTP(w, r.WithContext(ctx))
-	} else {
-		w2 := &errorResponseWriter{ResponseWriter: w}
-		h.ServeHTTP(w2, r.WithContext(ctx))
-		if err := w2.Error(); err != nil {
-			HandleError(router.errorHandler, w, r, err)
-		}
+	herr := captureHttpError(h, w, r.WithContext(ctx))
+	if herr != nil {
+		router.HandleError(w, r, herr)
 	}
 }
 

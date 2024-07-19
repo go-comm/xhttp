@@ -23,15 +23,19 @@ func WriteBytes(w http.ResponseWriter, status int, contentType string, b []byte)
 }
 
 func WriteString(w http.ResponseWriter, status int, contentType string, s string) error {
-	return WriteBytes(w, status, contentType, []byte(s))
+	return WriteBytes(w, status, contentType, StrToBytes(s))
 }
 
 func WriteHTML(w http.ResponseWriter, status int, b []byte) error {
 	return WriteBytes(w, status, "text/html; charset=UTF-8", b)
 }
 
+func WriteText(w http.ResponseWriter, status int, text string) error {
+	return WriteBytes(w, status, "text/plain; charset=utf-8", StrToBytes(text))
+}
+
 func WriteError(w http.ResponseWriter, status int, err string) error {
-	return WriteBytes(w, status, "text/plain; charset=utf-8", []byte(err))
+	return WriteBytes(w, status, "text/plain; charset=utf-8", StrToBytes(err))
 }
 
 func WriteErrorf(w http.ResponseWriter, status int, format string, a ...interface{}) error {
