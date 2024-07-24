@@ -108,6 +108,14 @@ func (router *Router) Handle(pattern string, h http.Handler, ms ...Middleware) {
 	router.mux.Handle(pattern, ApplyHandler(h, ms...))
 }
 
+func (router *Router) WithError(h func(w http.ResponseWriter, r *http.Request) error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h(w, r); err != nil {
+			router.HandleError(w, r, err)
+		}
+	})
+}
+
 type RequestContext struct {
 	Router *Router
 	Attrs  Attrs
