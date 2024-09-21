@@ -39,7 +39,7 @@ func (g *Group) Handle(pattern string, h http.Handler, ms ...Middleware) {
 }
 
 func (g *Group) HandleErrorFunc(pattern string, h func(w http.ResponseWriter, r *http.Request) error, ms ...Middleware) {
-	g.router.HandleErrorFunc(pattern, h, ms...)
+	g.Handle(pattern, g.router.ErrorFunc(h), ms...)
 }
 
 func (g *Group) ErrorFunc(h func(w http.ResponseWriter, r *http.Request) error) http.Handler {
