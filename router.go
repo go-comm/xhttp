@@ -104,16 +104,26 @@ func (router *Router) HandleFunc(pattern string, h func(http.ResponseWriter, *ht
 	router.Handle(pattern, http.HandlerFunc(h), ms...)
 }
 
+func (router *Router) HandleErrorFunc(pattern string, h func(w http.ResponseWriter, r *http.Request) error, ms ...Middleware) {
+	router.Handle(pattern, router.ErrorFunc(h), ms...)
+}
+
 func (router *Router) Handle(pattern string, h http.Handler, ms ...Middleware) {
 	router.mux.Handle(pattern, ApplyHandler(h, ms...))
 }
 
-func (router *Router) WithError(h func(w http.ResponseWriter, r *http.Request) error) http.Handler {
+func (router *Router) ErrorFunc(h func(w http.ResponseWriter, r *http.Request) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := h(w, r); err != nil {
 			router.HandleError(w, r, err)
 		}
 	})
+}
+
+var nopHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+func NopHandler() http.Handler {
+	return nopHandler
 }
 
 type RequestContext struct {

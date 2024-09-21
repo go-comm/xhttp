@@ -14,6 +14,10 @@ func (router *Router) Group(prefix string, ms ...Middleware) *Group {
 	return g.Use(ms...)
 }
 
+func (g *Group) Router() *Router {
+	return g.router
+}
+
 func (g *Group) Group(prefix string, ms ...Middleware) *Group {
 	sg := g.router.Group(g.prefix+prefix, g.middlewares...)
 	return sg.Use(ms...)
@@ -32,4 +36,12 @@ func (g *Group) Handle(pattern string, h http.Handler, ms ...Middleware) {
 	h = ApplyHandler(h, ms...)
 	h = ApplyHandler(h, g.middlewares...)
 	g.router.Handle(g.prefix+pattern, h)
+}
+
+func (g *Group) HandleErrorFunc(pattern string, h func(w http.ResponseWriter, r *http.Request) error, ms ...Middleware) {
+	g.router.HandleErrorFunc(pattern, h, ms...)
+}
+
+func (g *Group) ErrorFunc(h func(w http.ResponseWriter, r *http.Request) error) http.Handler {
+	return g.router.ErrorFunc(h)
 }
