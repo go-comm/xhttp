@@ -61,12 +61,12 @@ func RecoverWithConfig(config RecoverConfig) func(h http.Handler) http.Handler {
 								err = err2
 							}
 						}
-						var h = config.ErrorHandler
-						if h == nil {
-							h = LookupRouter(r).HandleError
+						var eh = config.ErrorHandler
+						if eh == nil {
+							eh = LookupRouter(r).HandleError
 						}
-						if h != nil {
-							h(w, r, err)
+						if eh != nil {
+							eh(w, r, err)
 						}
 					}
 				}
