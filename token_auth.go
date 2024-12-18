@@ -45,10 +45,10 @@ type TokenAuthConfig struct {
 }
 
 func TokenAuthWithConfig(config TokenAuthConfig) func(h http.Handler) http.Handler {
-	if config.Skipper != nil {
+	if config.Skipper == nil {
 		config.Skipper = DefaultTokenAuthConfig.Skipper
 	}
-	if config.ContextKey != nil {
+	if config.ContextKey == nil {
 		config.ContextKey = DefaultTokenAuthConfig.ContextKey
 	}
 	if len(config.Scheme) == 0 {
@@ -67,7 +67,7 @@ func TokenAuthWithConfig(config TokenAuthConfig) func(h http.Handler) http.Handl
 	extractFromHeader := func(req *http.Request, name string) string {
 		v := req.Header.Get(name)
 		if len(config.Scheme) != 0 {
-			v = strings.TrimSpace(strings.TrimLeft(v, config.Scheme))
+			v = strings.TrimSpace(strings.TrimPrefix(v, config.Scheme))
 		}
 		return v
 	}
