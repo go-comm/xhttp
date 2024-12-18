@@ -131,6 +131,7 @@ func TokenAuthWithConfig(config TokenAuthConfig) func(h http.Handler) http.Handl
 
 			if pass {
 				h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), config.ContextKey, vtoken)))
+				return
 			}
 
 			var eh = config.ErrorHandler
