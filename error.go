@@ -72,7 +72,8 @@ func captureHttpError(h http.Handler, w http.ResponseWriter, r *http.Request) er
 			return len(b), nil
 		},
 	}
-	CaptureResponseWriter(h, hooks, w, r)
+	w = HookResponseWriter(w, hooks)
+	h.ServeHTTP(w, r)
 	if pass {
 		return nil
 	}

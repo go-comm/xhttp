@@ -1,54 +1,206 @@
 package xhttp
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
 var (
 	DefaultLoggerConfig = LoggerConfig{
 		Skipper: DefaultSkipper,
-		Format: `{"time":"${time}","id":"${id}","remote_ip":"${remote_ip}"` +
+		Format: `{"time":"${time}","remote_ip":"${remote_ip}"` +
 			`,"host":"${host}","method":"${method}","uri":"${uri}"` +
 			`,"status":${status},"elapsed":${elapsed}` +
-			`,"bytes_in_size":${bytes_in_size},"bytes_out_size":${bytes_out_size},"bytes_in":${bytes_in},"bytes_out":${bytes_out}}` + "\n",
-		TimeLayout: time.RFC3339,
-		RemoteIP:   RealIP,
+			`,"reqsize":${reqsize},"ressize":${ressize}` +
+			`,"reqbody":"${reqbody}","resbody":"${resbody}"}` + "\n",
+		TimeLayout:                time.RFC3339,
+		RemoteIP:                  RealIP,
+		MaxDumpResponseWriterSize: 1024 * 8,
+		MaxDumpRequestBodySize:    1024 * 8,
+		Output:                    os.Stdout,
+		BytePoolSize:              512,
 	}
 )
 
 type LoggerConfig struct {
 	Skipper
 
-	Format     string
-	TimeLayout string
+	Format                    string
+	TimeLayout                string
+	MaxDumpResponseWriterSize int
+	MaxDumpRequestBodySize    int
+	Custom                    func(b *bytes.Buffer, r *http.Request)
+	RemoteIP                  func(r *http.Request) string
 
-	Output io.Writer
-
-	RemoteIP func(r *http.Request) string
+	Output       io.Writer
+	BytePoolSize int // B
 }
 
 func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 	if config.Skipper == nil {
 		config.Skipper = DefaultLoggerConfig.Skipper
 	}
-	var mapping = func(name string) string {
-
-		return name
+	if len(config.Format) == 0 {
+		config.Format = DefaultLoggerConfig.Format
 	}
+	if len(config.TimeLayout) == 0 {
+		config.TimeLayout = DefaultLoggerConfig.TimeLayout
+	}
+	if config.RemoteIP == nil {
+		config.RemoteIP = DefaultLoggerConfig.RemoteIP
+	}
+	if config.MaxDumpResponseWriterSize == 0 {
+		config.MaxDumpResponseWriterSize = DefaultLoggerConfig.MaxDumpResponseWriterSize
+	}
+	if config.MaxDumpRequestBodySize == 0 {
+		config.MaxDumpRequestBodySize = DefaultLoggerConfig.MaxDumpRequestBodySize
+	}
+	if config.BytePoolSize < DefaultLoggerConfig.BytePoolSize {
+		config.BytePoolSize = DefaultLoggerConfig.BytePoolSize
+	}
+	if config.Output == nil {
+		config.Output = DefaultLoggerConfig.Output
+	}
+
+	dumpReqbody := strings.Contains(config.Format, "${reqbody}")
+	dumpResbody := strings.Contains(config.Format, "${resbody}")
+
+	var quoteString = func(w *bytes.Buffer, s string) {
+		if strings.IndexByte(s, '"') < 0 {
+			w.WriteString(s)
+			return
+		}
+		s = strconv.Quote(s)
+		w.WriteString(s[1 : len(s)-1])
+	}
+
+	var quoteBytes = func(w *bytes.Buffer, b []byte) {
+		if bytes.IndexByte(b, '"') < 0 {
+			w.Write(b)
+			return
+		}
+		s := strconv.Quote(string(b))
+		w.WriteString(s[1 : len(s)-1])
+	}
+
+	var bytesPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, config.BytePoolSize)
+			return &b
+		},
+	}
+
+	var appendLimitBytes = func(b []byte, limit int, p []byte) []byte {
+		off := limit - len(b)
+		if off <= 0 {
+			return b
+		}
+		if len(p) > off {
+			p = p[:off]
+		}
+		b = append(b, p...)
+		return b
+	}
+
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if config.Skipper(w, r) {
 				h.ServeHTTP(w, r)
 				return
 			}
+			now := time.Now()
 
+			var hcode int
+			var reqbody []byte
+			var reqsize int
+			var resbody []byte
+			var ressize int
+			hooks := &Hooks{
+				Read: func(rb io.ReadCloser, b []byte) (n int, err error) {
+					n, err = rb.Read(b)
+					if n > 0 && dumpReqbody && reqsize < config.MaxDumpRequestBodySize {
+						reqbody = appendLimitBytes(reqbody, config.MaxDumpRequestBodySize, b[:n])
+					}
+					reqsize += n
+					return
+				},
+				WriteHeader: func(w http.ResponseWriter, code int) {
+					hcode = code
+					w.WriteHeader(code)
+				},
+				Write: func(w http.ResponseWriter, b []byte) (n int, err error) {
+					n, err = w.Write(b)
+					if n > 0 && dumpResbody && ressize < config.MaxDumpResponseWriterSize {
+						resbody = appendLimitBytes(resbody, config.MaxDumpResponseWriterSize, b[:n])
+					}
+					ressize += n
+					return
+				},
+			}
+			w = HookResponseWriter(w, hooks)
+			r = HookRequest(r, hooks)
+
+			var mapping = func(b *bytes.Buffer, name string) {
+				switch name {
+				case "custom":
+					if config.Custom != nil {
+						config.Custom(b, r)
+					}
+				case "time":
+					b.WriteString(time.Now().Format(config.TimeLayout))
+				case "uri":
+					quoteString(b, r.RequestURI)
+				case "path":
+					quoteString(b, r.URL.Path)
+				case "host":
+					b.WriteString(r.Host)
+				case "method":
+					b.WriteString(r.Method)
+				case "remote_ip":
+					quoteString(b, config.RemoteIP(r))
+				case "elapsed":
+					b.WriteString(strconv.FormatInt(int64(time.Since(now)/time.Millisecond), 10))
+				case "status":
+					b.WriteString(strconv.FormatInt(int64(hcode), 10))
+				case "reqsize":
+					b.WriteString(strconv.FormatInt(int64(reqsize), 10))
+				case "reqbody":
+					quoteBytes(b, reqbody)
+				case "ressize":
+					b.WriteString(strconv.FormatInt(int64(ressize), 10))
+				case "resbody":
+					quoteBytes(b, resbody)
+				case "referer":
+					quoteString(b, r.Header.Get("referer"))
+				case "user_agent":
+					quoteString(b, r.UserAgent())
+				default:
+					if strings.HasPrefix(name, "header_") {
+						quoteString(b, r.Header.Get(name[7:]))
+					} else if strings.HasPrefix(name, "cookie_") {
+						if c, _ := r.Cookie(name[7:]); c != nil {
+							quoteString(b, c.Value)
+						}
+					} else if strings.HasPrefix(name, "query_") {
+						quoteString(b, r.URL.Query().Get(name[6:]))
+					} else if strings.HasPrefix(name, "form_") {
+						quoteString(b, r.FormValue(name[5:]))
+					}
+				}
+			}
 			defer func() {
-				var b []byte
-				b = expand(b, config.Format, mapping)
-				config.Output.Write(b)
+				if config.Output != nil {
+					buf := bytesPool.Get().(*[]byte)
+					*buf = loggerExpand(*buf, config.Format, mapping)
+					config.Output.Write(*buf)
+					bytesPool.Put(buf)
+				}
 			}()
 
 			h.ServeHTTP(w, r)
@@ -58,15 +210,17 @@ func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 
 var _ = os.Expand
 
-func expand(buf []byte, s string, mapping func(string) string) []byte {
+func loggerExpand(buf []byte, s string, mapping func(w *bytes.Buffer, name string)) []byte {
+	b := bytes.NewBuffer(buf)
+	if minlen := len(s) * 2; b.Len() < minlen {
+		b.Grow(minlen)
+	}
+	b.Reset()
 	// ${} is all ASCII, so bytes are fine for this operation.
 	i := 0
 	for j := 0; j < len(s); j++ {
 		if s[j] == '$' && j+1 < len(s) {
-			if buf == nil {
-				buf = make([]byte, 0, 2*len(s))
-			}
-			buf = append(buf, s[i:j]...)
+			b.WriteString(s[i:j])
 			name, w := getShellName(s[j+1:])
 			if name == "" && w > 0 {
 				// Encountered invalid syntax; eat the
@@ -74,18 +228,16 @@ func expand(buf []byte, s string, mapping func(string) string) []byte {
 			} else if name == "" {
 				// Valid syntax, but $ was not followed by a
 				// name. Leave the dollar character untouched.
-				buf = append(buf, s[j])
+				b.WriteByte(s[j])
 			} else {
-				buf = append(buf, mapping(name)...)
+				mapping(b, name)
 			}
 			j += w
 			i = j + 1
 		}
 	}
-	if buf == nil {
-		return append(buf, s...)
-	}
-	return append(buf, s[i:]...)
+	b.WriteString(s[i:])
+	return b.Bytes()
 }
 
 // isShellSpecialVar reports whether the character identifies a special
