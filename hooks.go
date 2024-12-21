@@ -126,6 +126,14 @@ func HookResponseWriter(w http.ResponseWriter, h *Hooks) http.ResponseWriter {
 			CloseNotifier
 		}{hw, hw, hijacker, closeNotifier}
 	}
+	if !ok1 && !ok2 && ok3 && ok4 {
+		return &struct {
+			http.ResponseWriter
+			Unwrapper
+			http.Pusher
+			CloseNotifier
+		}{hw, hw, pusher, closeNotifier}
+	}
 	if ok1 && !ok2 && !ok3 && !ok4 {
 		return &struct {
 			http.ResponseWriter
@@ -154,7 +162,10 @@ func HookResponseWriter(w http.ResponseWriter, h *Hooks) http.ResponseWriter {
 			CloseNotifier
 		}{hw, hw, closeNotifier}
 	}
-	return hw
+	return &struct {
+		http.ResponseWriter
+		Unwrapper
+	}{hw, hw}
 }
 
 type hookResponseWriter struct {
