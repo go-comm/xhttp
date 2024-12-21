@@ -12,6 +12,8 @@ import (
 )
 
 var (
+	noEscapeTable = [256]bool{}
+
 	DefaultLoggerConfig = LoggerConfig{
 		Skipper: DefaultSkipper,
 		Format: `{"time":"${time}","remote_ip":"${remote_ip}"` +
@@ -27,6 +29,12 @@ var (
 		BytePoolSize:              512,
 	}
 )
+
+func init() {
+	for i := 0; i <= 126; i++ {
+		noEscapeTable[i] = i >= 32 /*space*/ && i != '\\' && i != '"'
+	}
+}
 
 type LoggerConfig struct {
 	Skipper
@@ -71,22 +79,26 @@ func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 	dumpReqbody := strings.Contains(config.Format, "${reqbody}")
 	dumpResbody := strings.Contains(config.Format, "${resbody}")
 
-	var quoteString = func(w *bytes.Buffer, s string) {
-		if strings.IndexByte(s, '"') < 0 {
-			w.WriteString(s)
-			return
+	var writeString = func(w *bytes.Buffer, s string) {
+		for _, c := range s {
+			if c < 256 && !noEscapeTable[c] {
+				s = strconv.Quote(s)
+				w.WriteString(s[1 : len(s)-1])
+				return
+			}
 		}
-		s = strconv.Quote(s)
-		w.WriteString(s[1 : len(s)-1])
+		w.WriteString(s)
 	}
 
-	var quoteBytes = func(w *bytes.Buffer, b []byte) {
-		if bytes.IndexByte(b, '"') < 0 {
-			w.Write(b)
-			return
+	var writeBytes = func(w *bytes.Buffer, b []byte) {
+		for _, c := range b {
+			if !noEscapeTable[c] {
+				s := strconv.Quote(string(b))
+				w.WriteString(s[1 : len(s)-1])
+				return
+			}
 		}
-		s := strconv.Quote(string(b))
-		w.WriteString(s[1 : len(s)-1])
+		w.Write(b)
 	}
 
 	var bytesPool = sync.Pool{
@@ -155,15 +167,15 @@ func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 				case "time":
 					b.WriteString(now.Format(config.TimeLayout))
 				case "uri":
-					quoteString(b, r.RequestURI)
+					writeString(b, r.RequestURI)
 				case "path":
-					quoteString(b, r.URL.Path)
+					writeString(b, r.URL.Path)
 				case "host":
 					b.WriteString(r.Host)
 				case "method":
 					b.WriteString(r.Method)
 				case "remote_ip":
-					quoteString(b, config.RemoteIP(r))
+					writeString(b, config.RemoteIP(r))
 				case "elapsed":
 					b.WriteString(strconv.FormatInt(int64(time.Since(now)/time.Millisecond), 10))
 				case "status":
@@ -171,26 +183,26 @@ func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 				case "reqsize":
 					b.WriteString(strconv.FormatInt(int64(reqsize), 10))
 				case "reqbody":
-					quoteBytes(b, reqbody)
+					writeBytes(b, reqbody)
 				case "ressize":
 					b.WriteString(strconv.FormatInt(int64(ressize), 10))
 				case "resbody":
-					quoteBytes(b, resbody)
+					writeBytes(b, resbody)
 				case "referer":
-					quoteString(b, r.Header.Get("referer"))
+					writeString(b, r.Header.Get("referer"))
 				case "user_agent":
-					quoteString(b, r.UserAgent())
+					writeString(b, r.UserAgent())
 				default:
 					if strings.HasPrefix(name, "header_") {
-						quoteString(b, r.Header.Get(name[7:]))
+						writeString(b, r.Header.Get(name[7:]))
 					} else if strings.HasPrefix(name, "cookie_") {
 						if c, _ := r.Cookie(name[7:]); c != nil {
-							quoteString(b, c.Value)
+							writeString(b, c.Value)
 						}
 					} else if strings.HasPrefix(name, "query_") {
-						quoteString(b, r.URL.Query().Get(name[6:]))
+						writeString(b, r.URL.Query().Get(name[6:]))
 					} else if strings.HasPrefix(name, "form_") {
-						quoteString(b, r.FormValue(name[5:]))
+						writeString(b, r.FormValue(name[5:]))
 					}
 				}
 			}

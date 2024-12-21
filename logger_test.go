@@ -26,7 +26,7 @@ func TestLogger(t *testing.T) {
 	router.HandleFunc("/hi", func(w http.ResponseWriter, r *http.Request) {
 		var msg bytes.Buffer
 		io.Copy(&msg, r.Body)
-		WriteString(w, http.StatusOK, "", "welcome!")
+		WriteString(w, http.StatusOK, "", "welcome!\n")
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/hi?ts=1000", bytes.NewBufferString(`hi "Sunny".`))
