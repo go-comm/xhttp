@@ -153,7 +153,7 @@ func LoggerWithConfig(config LoggerConfig) func(h http.Handler) http.Handler {
 						config.Custom(b, r)
 					}
 				case "time":
-					b.WriteString(time.Now().Format(config.TimeLayout))
+					b.WriteString(now.Format(config.TimeLayout))
 				case "uri":
 					quoteString(b, r.RequestURI)
 				case "path":
