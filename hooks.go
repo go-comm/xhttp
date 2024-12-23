@@ -73,9 +73,9 @@ func HookResponseWriter(w http.ResponseWriter, h *Hooks) http.ResponseWriter {
 			http.ResponseWriter
 			Unwrapper
 			http.Flusher
-			http.Hijacker
+			http.Pusher
 			CloseNotifier
-		}{hw, hw, flusher, hijacker, closeNotifier}
+		}{hw, hw, flusher, pusher, closeNotifier}
 	}
 	if !ok1 && ok2 && ok3 && ok4 {
 		return &struct {
