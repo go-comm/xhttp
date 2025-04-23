@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 )
 
 var DefaultClient = NewClient()
@@ -14,6 +15,7 @@ func NewClient() Client {
 
 type Client struct {
 	cli          *http.Client
+	baseURL      string
 	encoder      Encoder
 	decoder      Decoder
 	interceptors []func(next func(Request) (Response, error)) func(Request) (Response, error)
@@ -113,6 +115,14 @@ func (c Client) Encoder(en Encoder) Client {
 
 func (c Client) EncoderFunc(f func(w io.Writer, v interface{}) error) Client {
 	c.encoder = EncoderFunc(f)
+	return c
+}
+
+func (c Client) BaseURL(baseURL string) Client {
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL = baseURL + "/"
+	}
+	c.baseURL = baseURL
 	return c
 }
 

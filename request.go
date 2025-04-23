@@ -37,6 +37,9 @@ func getBodyReader(encoder Encoder, v interface{}) (rc io.ReadCloser, err error)
 }
 
 func newRequest(ctx context.Context, cli *Client, method, url string, body interface{}) Request {
+	if len(cli.baseURL) > 0 {
+		url = cli.baseURL + strings.TrimPrefix(url, "/")
+	}
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	r := &request{err: err, req: req, cli: cli}
 	r.Body(body)
