@@ -98,6 +98,10 @@ func (c Client) WithClient(cli *http.Client) Client {
 	return c
 }
 
+func (c Client) Client() *http.Client {
+	return c.cli
+}
+
 func (c Client) Decoder(de Decoder) Client {
 	c.decoder = de
 	return c
