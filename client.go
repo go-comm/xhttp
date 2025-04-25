@@ -31,7 +31,7 @@ func (c *Client) Do(req Request) Response {
 	}
 	interceptors := c.interceptors
 
-	var h = func(Request) (Response, error) {
+	var h = func(req Request) (Response, error) {
 		if err := req.Error(); err != nil {
 			return &response{err: err, cli: c}, err
 		}
@@ -39,10 +39,8 @@ func (c *Client) Do(req Request) Response {
 		return &response{err: err, cli: c, res: res}, err
 	}
 
-	if len(interceptors) > 0 {
-		for _, interceptor := range interceptors {
-			h = interceptor(h)
-		}
+	for i := len(interceptors) - 1; i >= 0; i-- {
+		h = interceptors[i](h)
 	}
 
 	resp, err := h(req)
@@ -130,13 +128,13 @@ func (c Client) BaseURL(baseURL string) Client {
 	return c
 }
 
-func (c Client) Interceptor(interceptor func(next func(Request) (Response, error)) func(Request) (Response, error)) Client {
+func (c Client) Interceptor(interceptor func(next func(req Request) (Response, error)) func(req Request) (Response, error)) Client {
 	c.interceptors = append(c.interceptors, interceptor)
 	return c
 }
 
-func (c Client) RequestInterceptor(f func(Request) error) Client {
-	return c.Interceptor(func(next func(Request) (Response, error)) func(Request) (Response, error) {
+func (c Client) RequestInterceptor(f func(req Request) error) Client {
+	return c.Interceptor(func(next func(Request) (Response, error)) func(req Request) (Response, error) {
 		return func(req Request) (Response, error) {
 			if err := f(req); err != nil {
 				return nil, err
@@ -146,8 +144,8 @@ func (c Client) RequestInterceptor(f func(Request) error) Client {
 	})
 }
 
-func (c Client) ResponseInterceptor(f func(Response) error) Client {
-	return c.Interceptor(func(next func(Request) (Response, error)) func(Request) (Response, error) {
+func (c Client) ResponseInterceptor(f func(res Response) error) Client {
+	return c.Interceptor(func(next func(Request) (Response, error)) func(req Request) (Response, error) {
 		return func(req Request) (Response, error) {
 			resp, err := next(req)
 			if err != nil {

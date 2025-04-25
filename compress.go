@@ -13,8 +13,8 @@ func (c Client) Gzip(enable bool) Client {
 	return c.Interceptor(GzipInterceptor())
 }
 
-func GzipInterceptor() func(next func(Request) (Response, error)) func(Request) (Response, error) {
-	return func(next func(Request) (Response, error)) func(Request) (Response, error) {
+func GzipInterceptor() func(next func(req Request) (Response, error)) func(req Request) (Response, error) {
+	return func(next func(req Request) (Response, error)) func(req Request) (Response, error) {
 		return func(req Request) (Response, error) {
 			req.Request().Header.Set("Accept-Encoding", "gzip")
 			resp, err := next(req)
