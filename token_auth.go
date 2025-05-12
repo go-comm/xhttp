@@ -34,6 +34,7 @@ type TokenAuthConfig struct {
 	Scheme string
 
 	// e.g.	"query:token"
+	//		"form:token"
 	//		"cookie:token"
 	//		"header:token"
 	//		"cookie:token|header:token"
@@ -72,6 +73,9 @@ func TokenAuthWithConfig(config TokenAuthConfig) func(h http.Handler) http.Handl
 		return v
 	}
 	extractFromQuery := func(req *http.Request, name string) string {
+		return req.URL.Query().Get(name)
+	}
+	extractFromForm := func(req *http.Request, name string) string {
 		return req.FormValue(name)
 	}
 
@@ -94,6 +98,8 @@ func TokenAuthWithConfig(config TokenAuthConfig) func(h http.Handler) http.Handl
 				extracts = append(extracts, &extract{name, extractFromHeader})
 			case "query":
 				extracts = append(extracts, &extract{name, extractFromQuery})
+			case "form":
+				extracts = append(extracts, &extract{name, extractFromForm})
 			default:
 			}
 		}
