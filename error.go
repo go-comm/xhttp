@@ -16,9 +16,6 @@ func (router *Router) HandleError(w http.ResponseWriter, r *http.Request, err er
 	}
 	var h = router.errorHandler
 	if h != nil {
-		for u := Unwrap(w); u != nil; u = Unwrap(u) {
-			w = u
-		}
 		h(w, r, err)
 	}
 }
