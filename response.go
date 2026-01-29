@@ -12,7 +12,7 @@ func decodeBody(decoder Decoder, r io.ReadCloser, v interface{}) error {
 	case *string:
 		var p []byte
 		p, err = _ReadAll(r)
-		*b = BytesToStr(p)
+		*b = string(p)
 	case *[]byte:
 		*b, err = _ReadAll(r)
 	default:

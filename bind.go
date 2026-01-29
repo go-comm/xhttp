@@ -95,7 +95,7 @@ func setFieldValue(rv reflect.Value, v string) error {
 		rv.SetFloat(n)
 	case reflect.Struct, reflect.Ptr:
 		if um, ok := rv.Interface().(BindTextUnmarshaler); ok {
-			return um.UnmarshalText(StrToBytes(v))
+			return um.UnmarshalText([]byte(v))
 		}
 	default:
 		return fmt.Errorf("can not read field %v to %v", v, rv.Kind())
