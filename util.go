@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
-	"unsafe"
+
+	"github.com/go-comm/xhttp/internel/xstring"
 )
 
 var (
@@ -19,13 +20,11 @@ var (
 )
 
 func StrToBytes(s string) []byte {
-	ps := (*[2]uintptr)(unsafe.Pointer(&s))
-	pb := [3]uintptr{ps[0], ps[1], ps[1]}
-	return *(*[]byte)(unsafe.Pointer(&pb))
+	return xstring.StrToBytes(s)
 }
 
 func BytesToStr(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return xstring.BytesToStr(b)
 }
 
 func RemovePort(host string) string {
